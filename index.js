@@ -3,20 +3,45 @@ const Anthropic = require("@anthropic-ai/sdk");
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const conversations = {};
-bot.onText(/\/start/, (msg) => { conversations[msg.chat.id] = []; bot.sendMessage(msg.chat.id, "Xin chao! Tao la Claude Bot. Go /clear de xoa lich su."); });
-bot.onText(/\/clear/, (msg) => { conversations[msg.chat.id] = []; bot.sendMessage(msg.chat.id, "Da xoa lich su."); });
+
+bot.onText(/\/start/, (msg) => {
+  conversations[msg.chat.id] = [];
+  bot.sendMessage(msg.chat.id, "Xin chao! Tao la Claude Bot. Go /clear de xoa lich su.");
+});
+
+bot.onText(/\/clear/, (msg) => {
+  conversations[msg.chat.id] = [];
+  bot.sendMessage(msg.chat.id, "Da xoa lich su hoi thoai.");
+});
+
 bot.on("message", async (msg) => {
-  const chatId = msg.chat.id; const text = msg.text;
+  const chatId = msg.chat.id;
+  const text = msg.text;
   if (!text || text.startsWith("/")) return;
   if (!conversations[chatId]) conversations[chatId] = [];
   conversations[chatId].push({ role: "user", content: text });
   if (conversations[chatId].length > 20) conversations[chatId] = conversations[chatId].slice(-20);
   try {
     await bot.sendChatAction(chatId, "typing");
-    const r = await anthropic.messages.create({ model: "claude-sonnet-4-20250514", max_tokens: 1024, messages: conversations[chatId] });
+    const r = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      messages: conversations[chatId],
+    });
     const reply = r.content[0].text;
     conversations[chatId].push({ role: "assistant", content: reply });
     bot.sendMessage(chatId, reply);
-  } catch(e) { bot.sendMessage(chatId, "Co loi xay ra."); }
+  } catch(e) {
+    console.error("API error:", e.message);
+    bot.sendMessage(chatId, "Co loi xay ra, thu lai sau nhe.");
+  }
 });
+
+bot.on("polling_error", (err) => {
+  console.error("Polling error:", err.message);
+  if (err.message && err.message.includes("409")) {
+    process.exit(1);
+  }
+});
+
 console.log("Bot dang chay...");
